@@ -13,6 +13,8 @@ from pathlib import Path
 
 import psutil
 
+from actions.calendar_manager import get_upcoming_events
+
 if platform.system() == "Windows":
     _WIN_HIDE: dict = {"creationflags": subprocess.CREATE_NO_WINDOW}
 else:
@@ -2591,6 +2593,14 @@ class MainWindow(QMainWindow):
         sep2.setStyleSheet(f"color: {C.BORDER}; margin: 2px 0;")
         lay.addWidget(sep2)
 
+        lay.addWidget(_sec("UPCOMING EVENTS"))
+        self._calendar_widget = CalendarWidget()
+        lay.addWidget(self._calendar_widget, stretch=1)
+        
+        sep3 = QFrame(); sep3.setFrameShape(QFrame.Shape.HLine)
+        sep3.setStyleSheet(f"color: {C.BORDER}; margin: 2px 0;")
+        lay.addWidget(sep3)
+
         lay.addWidget(_sec("COMMAND INPUT"))
         lay.addLayout(self._build_input_row())
 
@@ -3337,3 +3347,33 @@ class JarvisUI:
     def stop_speaking(self):
         if not self.muted:
             self.set_state("LISTENING")
+
+class CalendarWidget(QWidget):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setStyleSheet(f"background: {C.PANEL}; border: 1px solid {C.BORDER}; border-radius: 4px;")
+        lay = QVBoxLayout(self)
+        lay.setContentsMargins(4, 4, 4, 4)
+        lay.setSpacing(4)
+        
+        self.text = QTextEdit()
+        self.text.setReadOnly(True)
+        self.text.setStyleSheet(f"color: {C.TEXT_MED}; border: none; background: transparent;")
+        self.text.setFont(QFont("Courier New", 8))
+        lay.addWidget(self.text)
+        
+        self.tmr = QTimer(self)
+        self.tmr.timeout.connect(self.refresh)
+        self.tmr.start(60000)
+        self.refresh()
+        
+    def refresh(self):
+        from actions.calendar_manager import get_upcoming_events
+        events = get_upcoming_events(days=7)
+        if not events:
+            self.text.setPlainText("No upcoming events in 7 days.")
+            return
+        out = []
+        for e in events:
+            out.append(f"[{e['start_time'][5:16]}] {e['title']}")
+        self.text.setPlainText("\n".join(out))

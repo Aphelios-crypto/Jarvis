@@ -56,6 +56,7 @@ from actions.proactive         import ProactiveEngine
 from actions.background_monitor import (
     add_monitor, remove_monitor, list_monitors, check_all as monitor_check_all,
 )
+from actions.calendar_watcher import CalendarWatcher
 from actions.web_search        import _news as _fetch_news_sync
 from memory.config_manager     import get_brief_enabled
 
@@ -183,6 +184,30 @@ TOOL_DECLARATIONS = [
                 "message": {"type": "STRING", "description": "Reminder message text"}
             },
             "required": ["date", "time", "message"]
+        }
+    },
+    {
+        "name": "calendar_add_event",
+        "description": "Use this to schedule a meeting or reminder.",
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "title": {"type": "STRING", "description": "Title of the event"},
+                "start_time": {"type": "STRING", "description": "Start time in YYYY-MM-DDTHH:MM:SS format"},
+                "end_time": {"type": "STRING", "description": "Optional end time in YYYY-MM-DDTHH:MM:SS format"},
+                "description": {"type": "STRING", "description": "Optional description"}
+            },
+            "required": ["title", "start_time"]
+        }
+    },
+    {
+        "name": "calendar_get_events",
+        "description": "Use this to check the user's upcoming schedule.",
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "days": {"type": "INTEGER", "description": "Number of days ahead to check (default 7)"}
+            }
         }
     },
     {
@@ -573,11 +598,23 @@ class JarvisLive:
         self.ui.on_interrupt      = self.interrupt
         self._turn_done_event: asyncio.Event | None = None
         self._dashboard     = None
+        
+        self.calendar_watcher = CalendarWatcher(callback=self._handle_calendar_alert)
+        self.calendar_watcher.start()
+
         self._briefing_sent    = False          # morning briefing fires once per process
         self._sys_monitor      = SystemMonitor()  # persistent cooldown state
         self._proactive        = ProactiveEngine()
         self._last_user_speech = time.monotonic()  # updated on every user utterance
         self._session_log: list[str] = []          # conversation turns for end-of-session summary
+
+    def _handle_calendar_alert(self, event):
+        msg = f"[URGENT CALENDAR ALERT] The user's event '{event['title']}' is starting in less than 10 minutes! Inform the user immediately out loud."
+        if self._loop and self.session:
+            asyncio.run_coroutine_threadsafe(
+                self.session.send(input=msg, end_of_turn=True),
+                self._loop
+            )
 
     def _make_remote_key(self):
         """Called from Qt main thread when user presses Remote Control."""
@@ -751,6 +788,24 @@ class JarvisLive:
             elif name == "reminder":
                 r = await loop.run_in_executor(None, lambda: reminder(parameters=args, response=None, player=self.ui))
                 result = r or "Reminder set."
+
+            elif name == "calendar_add_event":
+                from actions.calendar_manager import add_event
+                r = await loop.run_in_executor(None, lambda: add_event(
+                    title=args.get("title", "Event"),
+                    start_time=args.get("start_time", ""),
+                    end_time=args.get("end_time", ""),
+                    description=args.get("description", "")
+                ))
+                result = r
+
+            elif name == "calendar_get_events":
+                from actions.calendar_manager import get_upcoming_events
+                def _get():
+                    events = get_upcoming_events(days=int(args.get("days", 7)))
+                    if not events: return "No upcoming events."
+                    return "Upcoming events:\n" + "\n".join([f"- {e['start_time']}: {e['title']}" for e in events])
+                result = await loop.run_in_executor(None, _get)
 
             elif name == "youtube_video":
                 r = await loop.run_in_executor(None, lambda: youtube_video(parameters=args, response=None, player=self.ui))
