@@ -25,11 +25,11 @@ _nvml_lib: object = None
 _nvml_ok:  object = None   # None=untested  True=works  False=unavailable
 
 
-def _nvml_gpu() -> float:
-    """GPU utilisation via NVML — zero subprocess on all platforms."""
+def _nvml_gpu_metrics() -> tuple[float, float]:
+    """GPU utilisation and temp via NVML — zero subprocess on all platforms."""
     global _nvml_lib, _nvml_ok
     if _nvml_ok is False:
-        return -1.0
+        return -1.0, -1.0
     try:
         class _Util(ctypes.Structure):
             _fields_ = [("gpu", ctypes.c_uint), ("memory", ctypes.c_uint)]
@@ -56,30 +56,55 @@ def _nvml_gpu() -> float:
 
         if _nvml_lib is None:
             _nvml_ok = False
-            return -1.0
+            return -1.0, -1.0
 
         dev = ctypes.c_void_p()
         _nvml_lib.nvmlDeviceGetHandleByIndex_v2(0, ctypes.byref(dev))
         u = _Util()
         _nvml_lib.nvmlDeviceGetUtilizationRates(dev, ctypes.byref(u))
+        
+        temp = ctypes.c_uint()
+        _nvml_lib.nvmlDeviceGetTemperature(dev, 0, ctypes.byref(temp)) # 0 = NVML_TEMPERATURE_GPU
+        
         _nvml_ok = True
-        return float(u.gpu)
+        return float(u.gpu), float(temp.value)
     except Exception:
         _nvml_ok = False
-        return -1.0
+        return -1.0, -1.0
 
 
-def _get_gpu_usage() -> float:
+def _get_gpu_metrics() -> tuple[float, float]:
     # pynvml — subprocess-free, works everywhere if installed
     try:
         import pynvml  # type: ignore
         pynvml.nvmlInit()
         h = pynvml.nvmlDeviceGetHandleByIndex(0)
-        return float(pynvml.nvmlDeviceGetUtilizationRates(h).gpu)
+        load = float(pynvml.nvmlDeviceGetUtilizationRates(h).gpu)
+        temp = float(pynvml.nvmlDeviceGetTemperature(h, pynvml.NVML_TEMPERATURE_GPU))
+        return load, temp
     except Exception:
         pass
 
-    return _nvml_gpu()
+    # Try NVML ctypes fallback
+    load, temp = _nvml_gpu_metrics()
+    if load >= 0:
+        return load, temp
+        
+    # Fallback for AMD/Intel GPUs on Windows (GPU Load only)
+    if _OS == "Windows":
+        try:
+            import subprocess
+            out = subprocess.check_output(
+                ["powershell", "-NoProfile", "-Command", 
+                 "(Get-Counter '\\GPU Engine(*)\\Utilization Percentage' -ErrorAction SilentlyContinue).CounterSamples | Measure-Object -Property CookedValue -Sum | Select-Object -ExpandProperty Sum"],
+                timeout=3, creationflags=subprocess.CREATE_NO_WINDOW
+            ).decode().strip()
+            if out:
+                return float(out), -1.0
+        except Exception:
+            pass
+
+    return -1.0, -1.0
 
 
 def _get_cpu_temp() -> float:
@@ -115,7 +140,7 @@ def get_system_status() -> dict:
     cpu  = psutil.cpu_percent(interval=0.2)
     ram  = psutil.virtual_memory()
     temp = _get_cpu_temp()
-    gpu  = _get_gpu_usage()
+    gpu_load, gpu_temp  = _get_gpu_metrics()
 
     boot_time   = psutil.boot_time()
     uptime_secs = time.time() - boot_time
@@ -128,7 +153,8 @@ def get_system_status() -> dict:
         "ram_used_gb":   round(ram.used   / 1024 ** 3, 1),
         "ram_total_gb":  round(ram.total  / 1024 ** 3, 1),
         "cpu_temp_c":    round(temp, 1) if temp > 0 else None,
-        "gpu_percent":   round(gpu,  1) if gpu  >= 0 else None,
+        "gpu_percent":   round(gpu_load, 1) if gpu_load >= 0 else None,
+        "gpu_temp_c":    round(gpu_temp, 1) if gpu_temp > 0 else None,
         "uptime":        f"{uptime_h}h {uptime_m}m",
         "process_count": len(psutil.pids()),
     }
@@ -156,7 +182,7 @@ class SystemMonitor:
             cpu  = psutil.cpu_percent(interval=None)
             ram  = psutil.virtual_memory().percent
             temp = _get_cpu_temp()
-            gpu  = _get_gpu_usage()
+            gpu_load, gpu_temp = _get_gpu_metrics()
         except Exception:
             return None
 
@@ -190,9 +216,9 @@ class SystemMonitor:
             )
             self._record("temp")
 
-        if gpu >= 0 and gpu >= self.thresholds["gpu"] and self._can_alert("gpu"):
+        if gpu_load >= 0 and gpu_load >= self.thresholds["gpu"] and self._can_alert("gpu"):
             alerts.append(
-                f"[SYSTEM_ALERT] GPU load is at {gpu:.0f}%. "
+                f"[SYSTEM_ALERT] GPU load is at {gpu_load:.0f}%. "
                 "Briefly inform the user in their language."
             )
             self._record("gpu")
