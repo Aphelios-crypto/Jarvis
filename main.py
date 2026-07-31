@@ -48,6 +48,7 @@ from actions.browser_control   import browser_control
 from actions.file_controller   import file_controller
 from actions.code_helper       import code_helper
 from actions.dev_agent         import dev_agent
+from actions.subagent          import invoke_subagent
 from actions.web_search        import web_search as web_search_action
 from actions.computer_control  import computer_control
 from actions.game_updater      import game_updater
@@ -570,6 +571,17 @@ TOOL_DECLARATIONS = [
             "required": ["category", "key", "value"]
         }
     },
+    {
+        "name": "invoke_subagent",
+        "description": "Spawns a powerful autonomous subagent to write code, debug issues, or execute multi-step OS terminal commands in the background.",
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "instruction": {"type": "STRING", "description": "The exact objective the subagent needs to accomplish."}
+            },
+            "required": ["instruction"]
+        }
+    },
 ]
 
 # --- Plugin system ---
@@ -925,6 +937,16 @@ class JarvisLive:
                     import os as _os
                     _os._exit(0)
                 asyncio.create_task(_do_shutdown())
+
+            elif name == "invoke_subagent":
+                r = await loop.run_in_executor(
+                    None,
+                    lambda: invoke_subagent(
+                        instruction=args.get("instruction", ""),
+                        ui_logger=self.ui.write_log
+                    )
+                )
+                result = r or "Done."
 
             else:
                 result = f"Unknown tool: {name}"

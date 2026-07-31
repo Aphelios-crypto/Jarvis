@@ -25,6 +25,7 @@ TOOL ROUTING:
 - browser_control: Use this to physically open websites or GitHub repos in the user's browser (action='search' or 'go_to').
 - calendar_add_event: Use this to schedule a meeting or reminder. Provide title and start_time (YYYY-MM-DDTHH:MM:SS).
 - calendar_get_events: Use this to check the user's upcoming schedule. Provide days (int).
+- invoke_subagent: ONLY for complex programming, refactoring, or multi-step OS tasks. Tell the subagent exactly what you need built or investigated. It runs in the background and returns a final text report.
 - Language: Respond in user's language; extract parameters in English.
 
 FEW-SHOT EXAMPLES (HOW TO RESPOND):
