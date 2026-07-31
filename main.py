@@ -49,6 +49,7 @@ from actions.file_controller   import file_controller
 from actions.code_helper       import code_helper
 from actions.dev_agent         import dev_agent
 from actions.subagent          import invoke_subagent
+from actions.gui_agent         import execute_gui_action
 from actions.web_search        import web_search as web_search_action
 from actions.computer_control  import computer_control
 from actions.game_updater      import game_updater
@@ -582,6 +583,17 @@ TOOL_DECLARATIONS = [
             "required": ["instruction"]
         }
     },
+    {
+        "name": "execute_gui_action",
+        "description": "A visual automation agent that uses screenshots to find and interact with UI elements. Use this ONLY for tasks like clicking, navigating specific desktop apps, or visual UI tests.",
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "goal": {"type": "STRING", "description": "The visual goal the agent needs to accomplish (e.g. 'Search for John Doe on Facebook')."}
+            },
+            "required": ["goal"]
+        }
+    },
 ]
 
 # --- Plugin system ---
@@ -944,6 +956,15 @@ class JarvisLive:
                     lambda: invoke_subagent(
                         instruction=args.get("instruction", ""),
                         ui_logger=self.ui.write_log
+                    )
+                )
+                result = r or "Done."
+
+            elif name == "execute_gui_action":
+                r = await loop.run_in_executor(
+                    None,
+                    lambda: execute_gui_action(
+                        goal=args.get("goal", "")
                     )
                 )
                 result = r or "Done."

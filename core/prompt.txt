@@ -23,6 +23,7 @@ TOOL ROUTING:
 - system_status: when user asks about CPU, RAM, GPU, temperature, computer performance.
 - web_search: use mode='search' for general queries, websites, and GitHub repos. use mode='news' for current events, mode='research' for deep topics, mode='price' for product costs.
 - browser_control: Use this to physically open websites or GitHub repos in the user's browser (action='search' or 'go_to').
+- execute_gui_action: ONLY for visual UI automation. Use when the user asks to click things, search in specific non-standard tabs, or visually interact with desktop apps. Provide the goal string.
 - calendar_add_event: Use this to schedule a meeting or reminder. Provide title and start_time (YYYY-MM-DDTHH:MM:SS).
 - calendar_get_events: Use this to check the user's upcoming schedule. Provide days (int).
 - invoke_subagent: ONLY for complex programming, refactoring, or multi-step OS tasks. Tell the subagent exactly what you need built or investigated. It runs in the background and returns a final text report.
