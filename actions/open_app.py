@@ -13,6 +13,10 @@ _SYSTEM = platform.system()
 
 _APP_ALIASES: dict[str, dict[str, str]] = {
 
+    "antigravity ide":    {"Windows": "antigravity-ide",         "Darwin": "Antigravity IDE",      "Linux": "antigravity-ide"},
+    "anti-gravity ide":   {"Windows": "antigravity-ide",         "Darwin": "Antigravity IDE",      "Linux": "antigravity-ide"},
+    "antigravity":        {"Windows": "antigravity-ide",         "Darwin": "Antigravity IDE",      "Linux": "antigravity-ide"},
+    "anti-gravity":       {"Windows": "antigravity-ide",         "Darwin": "Antigravity IDE",      "Linux": "antigravity-ide"},
     "chrome":             {"Windows": "chrome",                  "Darwin": "Google Chrome",        "Linux": "google-chrome"},
     "google chrome":      {"Windows": "chrome",                  "Darwin": "Google Chrome",        "Linux": "google-chrome"},
     "firefox":            {"Windows": "firefox",                 "Darwin": "Firefox",              "Linux": "firefox"},
